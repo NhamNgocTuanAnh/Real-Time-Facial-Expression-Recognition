@@ -59,6 +59,7 @@
 # import the necessary packages
 from imutils.video import VideoStream
 import argparse
+
 import datetime
 import imutils
 import time
@@ -144,6 +145,7 @@ while video.isOpened():
         gray_face = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
         faces = face_detection.detectMultiScale(gray_face, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
                                                 flags=cv2.CASCADE_SCALE_IMAGE)
+        print("Kieru gì"+ str(type(faces)))
         for (x, y, w, h) in faces:
             if y+w >10 and x+h >10:
             # cv2.rectangle(frame1, (x_f, y_f), (x_f + w_f, y_f + h_f), (255, 0, 0), 2)
