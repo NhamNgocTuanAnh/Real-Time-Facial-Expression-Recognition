@@ -63,11 +63,12 @@ cpdef smooth_emotions():
     cdef float current_time = 0
     cdef int number_face = 0 
     cdef str label = ''
+    cdef numpy.ndarray roi
     while not finished:
        # cls()
         #
+        
         try:
-            
 
             number_face += 1
             
@@ -79,9 +80,9 @@ cpdef smooth_emotions():
                 #total_preds = total_preds / number_face
                 #number_face = 0
             
-            roi = gray_temp.astype("float") / 255.0
-            roi = img_to_array(roi)
-            roi = numpy.expand_dims(roi, axis=0)
+            
+            roi = numpy.expand_dims(img_to_array(gray_temp.astype("float") / 255.0), axis=0)
+            print(str(type(roi)))
             preds = model_facial_expression.predict(roi)[0]
             
             #if number_face == 0:
@@ -90,7 +91,7 @@ cpdef smooth_emotions():
              #   total_preds += preds
                 
             label = EMOTIONS[preds.argmax()]
-            print(str(type(label)))
+            #print(str(type(label)))
             #print(str(total_preds)+" time: "+ str(current_time))
             #input_preds_buffer.put(preds, timeout=1)
             #
@@ -107,13 +108,14 @@ cpdef smooth_emotions():
 @cython.wraparound(False)
 cpdef show():
     # detection_buffer = Queue()
-    global paused, finished, EMOTIONS
+    global paused, finished, EMOTIONS, preds
+    cdef str text = ''
     cdef bint video_true = True
     cascade = []
     # Load_Cascades(cascade)
     cap = cv2.VideoCapture('democlassroom.mp4')
-    cdef numpy.ndarray frame, gray
-
+    #cap = cv2.VideoCapture('test.mp4')
+    
     cdef float fps = cap.get(cv2.CAP_PROP_FPS)
     cdef float time_frame = 1.0 / fps
 
@@ -128,21 +130,24 @@ cpdef show():
 
     cdef int increment_times = 0
     cdef int count = 0
+    cdef int max_emotion_position = 0 
     cdef numpy.uint32_t x, y, w, h
     cdef float end_time, start_time, frame_number, frame_delay
     frame_number = 0
     frame_delay = 0
     # cdef Rectangle face
     # cdef int x, y, w, h
-
     
+    cdef numpy.ndarray frame, gray
     while (video_true) :
         canvas = numpy.zeros((550, 300, 3), dtype="uint8")
+        
         if not paused:
             start_time = time.time()
             try:
                     # print("Kiểu gì EMOTIONS" + str(type(EMOTIONS)))
                 # Capture frame-by-frame
+                
                 ret, frame = cap.read()
                 # print("Kieru gì" + str(type(ret)))
                 # print("Kieru gì" + str(type(frame)))
@@ -152,13 +157,30 @@ cpdef show():
                     finished = True
                     break
                 if not(frame is None):
+                    if not(preds is None):
+                    #label = EMOTIONS[preds.argmax()]
+                        max_emotion_position = preds.argmax()
+                        for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
+                            #construct the label text
+                            
+                            text = "{}: {:.2f}%".format(emotion, prob * 100)
+                       
+                            color = (255, 0, 0)          
+                            if max_emotion_position == i:
+                                color = (225,225,225)
+                                
+                            cv2.putText(frame, text, (10, (i * 35) + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+                            #print("Tao co sung ne" + str(type(color)))
+                    cv2.imshow('frame', frame) 
                     if count % 5 == 0:
                         # Our operations on the frame come here
+
                         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
                                                                 flags=cv2.CASCADE_SCALE_IMAGE)
+                        print("Kieru gì" + str(type(faces)))
 
-                        i = 0
+                        #i = 0
                         for i in range(0,len(faces)):
                             # print(faces[i][0])
                             # print(face.dtype)
@@ -171,38 +193,38 @@ cpdef show():
                             # print("Kiểu gì x" + str(type(x)))
                             # if y+w >20 and x+h >20:
                             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                            cv2.imshow('frame', frame) 
                             
                             roi = gray[y:y + h, x:x + w]
                             roi = cv2.resize(roi, (48, 48))
                             input_image_time_buffer.put((roi,time.time()), timeout=1)
-                            
-                            i+=1
+                        cv2.imshow('frame', frame)   
+                            #i+=1
                         end_time = time.time()
                         if (end_time - start_time) > 0:
                             fpsInfo = "FPS: " + str(1.0 / (end_time - start_time))  # FPS = 1 / time to process loop
-                            font = cv2.FONT_HERSHEY_DUPLEX
-                            cv2.putText(frame, fpsInfo, (10, 20), font, 0.4, (255, 0, 0), 1)
-                        cv2.imshow('frame', frame)
-                        i = 0
-
+                            font = cv2.FONT_HERSHEY_SIMPLEX
+                            cv2.putText(frame, fpsInfo, (20, 30), font, 0.4, (255, 0, 0), 1)
+                            
                     count += 1
- 
-
-
+                if not(preds is None):
+                    #label = EMOTIONS[preds.argmax()]
+                    max_emotion_position = preds.argmax()
+                    for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
+                        #construct the label text
+                        
+                        text = "{}: {:.2f}%".format(emotion, prob * 100)
+                   
+                        color = (255, 0, 0)          
+                        if max_emotion_position == i:
+                            color = (225,225,225)
+                            
+                        cv2.putText(frame, text, (10, (i * 35) + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+                cv2.imshow('frame', frame) 
             except queue.Full:
                 print("Full memory")
                 pass
-        #try:
-            #preds = input_preds_buffer.get(timeout=0)
-            #label = EMOTIONS[preds.argmax()]
-            #for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
-            # construct the label text
-                #text = "{}: {:.2f}%".format(emotion, prob * 100)
-                #cv2.putText(canvas, text, (10, (i * 35) + 23),
-                            #cv2.FONT_HERSHEY_SIMPLEX, 0.45,
-                            #(255, 255, 255), 2)
-        #except queue.Empty:
-            #print(" ")
+
         #cv2.imshow("Probabilities", canvas)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             finished = True
