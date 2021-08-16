@@ -17,7 +17,10 @@ from libc.stdint cimport (
 from keras.models import model_from_json
 from keras.preprocessing.image import img_to_array
 import threading,queue
-input_buffer = queue.Queue(20)
+input_image_time_buffer = queue.Queue(50)
+input_time_buffer = queue.Queue(50)
+input_preds_buffer = queue.Queue(50)
+
 
 cdef int number = 100000
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
@@ -35,31 +38,65 @@ cdef Py_UNICODE* EMOTIONS[7]
 EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"]
 cdef numpy.ndarray frame_temp, gray_temp, preds
 
-cdef bint finished = True
+cdef bint paused = False
+cdef bint finished = False
 
-def cls():
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef cls():
     os.system('cls' if os.name=='nt' else 'clear')
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+cpdef clickListener(event, x, y, flags, param):
+    global paused
+    if event==cv2.EVENT_LBUTTONUP:
+        print ("%s video" % ("Resume" if paused else "Pause"))
+        paused = not paused
+        
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cpdef smooth_emotions():
-    global gray_temp, EMOTIONS, preds
-    while True:
-        cls()
+    global gray_temp, EMOTIONS, preds, finished
+    total_preds = numpy.array([])
+    cdef float last_time = 0  
+    cdef float current_time = 0
+    cdef int number_face = 0 
+    cdef str label = ''
+    while not finished:
+       # cls()
+        #
         try:
-            gray_temp = input_buffer.get(timeout=1)
+            
+
+            number_face += 1
+            
+            (gray_temp,current_time) = input_image_time_buffer.get(timeout=1)
+            #current_time = input_time_buffer.get(timeout=1)
+            
+            #if current_time != last_time:
+               # last_time = current_time
+                #total_preds = total_preds / number_face
+                #number_face = 0
+            
             roi = gray_temp.astype("float") / 255.0
             roi = img_to_array(roi)
             roi = numpy.expand_dims(roi, axis=0)
             preds = model_facial_expression.predict(roi)[0]
-            print("type: " + str(type(preds)))
-            # emotion_probability = np.max(preds)
+            
+            #if number_face == 0:
+             #   total_preds = preds
+           # else:
+             #   total_preds += preds
+                
             label = EMOTIONS[preds.argmax()]
-            print(str(label))
-
+            print(str(type(label)))
+            #print(str(total_preds)+" time: "+ str(current_time))
+            #input_preds_buffer.put(preds, timeout=1)
+            #
         except queue.Empty:
             print(" ")
-
+        #cv2.imshow("Probabilities", canvas)
 
 # Có một số yếu tố khiến mã chậm hơn như đã thảo luận trong tài liệu Cython đó là:
 #
@@ -70,11 +107,11 @@ cpdef smooth_emotions():
 @cython.wraparound(False)
 cpdef show():
     # detection_buffer = Queue()
-    # global finished
+    global paused, finished, EMOTIONS
     cdef bint video_true = True
     cascade = []
     # Load_Cascades(cascade)
-    cap = cv2.VideoCapture('test.mp4')
+    cap = cv2.VideoCapture('democlassroom.mp4')
     cdef numpy.ndarray frame, gray
 
     cdef float fps = cap.get(cv2.CAP_PROP_FPS)
@@ -98,61 +135,79 @@ cpdef show():
     # cdef Rectangle face
     # cdef int x, y, w, h
 
-    print("type time: "+ str(type(start_time)))
-    while (video_true) and finished:
-        start_time = time.time()
-        try:
-                # print("Kiểu gì EMOTIONS" + str(type(EMOTIONS)))
-            # Capture frame-by-frame
-            ret, frame = cap.read()
-            # print("Kieru gì" + str(type(ret)))
-            # print("Kieru gì" + str(type(frame)))
-            # Kieru gì <class 'bool'>
-            # Kieru gì <class 'numpy.ndarray'>
-            if ret is not True:
-                break
-            if not(frame is None):
-                # Our operations on the frame come here
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
-                                                        flags=cv2.CASCADE_SCALE_IMAGE)
-
-                i = 0
-                for i in range(0,len(faces)):
-                    # print(faces[i][0])
-                    # print(face.dtype)
-                    # print(str(type(face)))
-                    x = faces[i][0]
-                    y = faces[i][1]
-                    w = faces[i][2]
-                    h = faces[i][3]
-
-                    # print("Kiểu gì x" + str(type(x)))
-                    # if y+w >20 and x+h >20:
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                    if count % 5 ==0:
-                        roi = gray[y:y + h, x:x + w]
-                        roi = cv2.resize(roi, (48, 48))
-                        input_buffer.put(roi, timeout=1)
-
-                    i+=1
-                end_time = time.time()
-                if (end_time - start_time) > 0:
-                    fpsInfo = "FPS: " + str(1.0 / (end_time - start_time))  # FPS = 1 / time to process loop
-                    font = cv2.FONT_HERSHEY_DUPLEX
-                    cv2.putText(frame, fpsInfo, (10, 20), font, 0.4, (255, 0, 0), 1)
-                cv2.imshow('frame', frame)
-                i = 0
-
-                count += 1
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+    
+    while (video_true) :
+        canvas = numpy.zeros((550, 300, 3), dtype="uint8")
+        if not paused:
+            start_time = time.time()
+            try:
+                    # print("Kiểu gì EMOTIONS" + str(type(EMOTIONS)))
+                # Capture frame-by-frame
+                ret, frame = cap.read()
+                # print("Kieru gì" + str(type(ret)))
+                # print("Kieru gì" + str(type(frame)))
+                # Kieru gì <class 'bool'>
+                # Kieru gì <class 'numpy.ndarray'>
+                if not (ret is  True):
+                    finished = True
                     break
+                if not(frame is None):
+                    if count % 5 == 0:
+                        # Our operations on the frame come here
+                        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
+                                                                flags=cv2.CASCADE_SCALE_IMAGE)
+
+                        i = 0
+                        for i in range(0,len(faces)):
+                            # print(faces[i][0])
+                            # print(face.dtype)
+                            # print(str(type(face)))
+                            x = faces[i][0]
+                            y = faces[i][1]
+                            w = faces[i][2]
+                            h = faces[i][3]
+
+                            # print("Kiểu gì x" + str(type(x)))
+                            # if y+w >20 and x+h >20:
+                            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                            
+                            roi = gray[y:y + h, x:x + w]
+                            roi = cv2.resize(roi, (48, 48))
+                            input_image_time_buffer.put((roi,time.time()), timeout=1)
+                            
+                            i+=1
+                        end_time = time.time()
+                        if (end_time - start_time) > 0:
+                            fpsInfo = "FPS: " + str(1.0 / (end_time - start_time))  # FPS = 1 / time to process loop
+                            font = cv2.FONT_HERSHEY_DUPLEX
+                            cv2.putText(frame, fpsInfo, (10, 20), font, 0.4, (255, 0, 0), 1)
+                        cv2.imshow('frame', frame)
+                        i = 0
+
+                    count += 1
+ 
 
 
-
-        except queue.Full:
-            print("Full memory")
-            pass
+            except queue.Full:
+                print("Full memory")
+                pass
+        #try:
+            #preds = input_preds_buffer.get(timeout=0)
+            #label = EMOTIONS[preds.argmax()]
+            #for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
+            # construct the label text
+                #text = "{}: {:.2f}%".format(emotion, prob * 100)
+                #cv2.putText(canvas, text, (10, (i * 35) + 23),
+                            #cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                            #(255, 255, 255), 2)
+        #except queue.Empty:
+            #print(" ")
+        #cv2.imshow("Probabilities", canvas)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            finished = True
+            break
+        
     cap.release()
     cv2.destroyAllWindows()
 

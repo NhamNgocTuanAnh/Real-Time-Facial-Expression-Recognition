@@ -22,17 +22,16 @@ session = InteractiveSession(config=config)
 
 # parameters for loading data and images
 detection_model_path = 'haarcascade_frontalface_default.xml'
-emotion_model_path = 'models/_mini_XCEPTION.106-0.65.hdf5'
+
 # load model facial_expression
-model_facial_expression = model_from_json(open("facial_expression_model_structure.json", "r").read())
+model_facial_expression = model_from_json(open("fer.json", "r").read())
 
 # load weights facial_expression
-model_facial_expression.load_weights('facial_expression_model_weights.h5')
+model_facial_expression.load_weights('fer.h5')
 
 # hyper-parameters for bounding boxes shape
 # loading models
 face_detection = cv2.CascadeClassifier(detection_model_path)
-emotion_classifier = load_model(emotion_model_path, compile=False)
 EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"]
 field_names = ["Timestamp", "angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"]
 
