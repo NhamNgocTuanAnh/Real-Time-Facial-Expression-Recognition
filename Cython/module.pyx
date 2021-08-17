@@ -18,8 +18,7 @@ from keras.models import model_from_json
 from keras.preprocessing.image import img_to_array
 import threading,queue
 input_image_time_buffer = queue.Queue(50)
-input_time_buffer = queue.Queue(50)
-input_preds_buffer = queue.Queue(50)
+
 
 
 cdef int number = 100000
@@ -34,12 +33,13 @@ model_facial_expression.load_weights('model/fer.h5')
 #   # cascade.append(cv2.CascadeClassifier('haarcascade_eye.xml'))
 #   print("Cascades loaded!!")
 
-cdef Py_UNICODE* EMOTIONS[7]
-EMOTIONS = ["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"]
-cdef numpy.ndarray frame_temp, gray_temp, preds
-
-cdef bint paused = False
-cdef bint finished = False
+#cdef Py_UNICODE* EMOTIONS[7]
+EMOTIONS = numpy.array(["angry", "disgust", "scared", "happy", "sad", "surprised", "neutral"])
+cdef :
+    str log_system = 'Error: '
+    bint paused = False
+    bint finished = False
+    numpy.ndarray frame_temp, gray_temp, preds
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -59,11 +59,12 @@ cpdef clickListener(event, x, y, flags, param):
 cpdef smooth_emotions():
     global gray_temp, EMOTIONS, preds, finished
     total_preds = numpy.array([])
-    cdef float last_time = 0  
-    cdef float current_time = 0
-    cdef int number_face = 0 
-    cdef str label = ''
-    cdef numpy.ndarray roi
+    cdef :
+        float last_time = 0
+        float current_time = 0
+        int number_face = 0
+        str label = ''
+        numpy.ndarray roi
     while not finished:
        # cls()
         #
@@ -90,7 +91,7 @@ cpdef smooth_emotions():
            # else:
              #   total_preds += preds
                 
-            label = EMOTIONS[preds.argmax()]
+            #label = EMOTIONS[preds.argmax()]
             #print(str(type(label)))
             #print(str(total_preds)+" time: "+ str(current_time))
             #input_preds_buffer.put(preds, timeout=1)
@@ -108,9 +109,9 @@ cpdef smooth_emotions():
 @cython.wraparound(False)
 cpdef show():
     # detection_buffer = Queue()
-    global paused, finished, EMOTIONS, preds
+    global paused, finished, EMOTIONS, preds, log_system
     cdef str text = ''
-    cdef bint video_true = True
+    #cdef bint video_true = True
     cascade = []
     # Load_Cascades(cascade)
     cap = cv2.VideoCapture('democlassroom.mp4')
@@ -125,7 +126,7 @@ cpdef show():
     # but get coerced to and from Cython as booleans.
 
 
-    cdef int i
+    cdef int i, high_level_emotion
     cdef int increment = 0
 
     cdef int increment_times = 0
@@ -139,15 +140,10 @@ cpdef show():
     # cdef int x, y, w, h
     
     cdef numpy.ndarray frame, gray
-    while (video_true) :
-        canvas = numpy.zeros((550, 300, 3), dtype="uint8")
-        
+    while True :
         if not paused:
             start_time = time.time()
             try:
-                    # print("Kiểu gì EMOTIONS" + str(type(EMOTIONS)))
-                # Capture frame-by-frame
-                
                 ret, frame = cap.read()
                 # print("Kieru gì" + str(type(ret)))
                 # print("Kieru gì" + str(type(frame)))
@@ -171,14 +167,14 @@ cpdef show():
                                 
                             cv2.putText(frame, text, (10, (i * 35) + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
                             #print("Tao co sung ne" + str(type(color)))
-                    cv2.imshow('frame', frame) 
+                    #cv2.imshow('frame', frame)
                     if count % 5 == 0:
                         # Our operations on the frame come here
 
                         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
                                                                 flags=cv2.CASCADE_SCALE_IMAGE)
-                        print("Kieru gì" + str(type(faces)))
+                        print("Kiểu gì" + str(type(EMOTIONS)))
 
                         #i = 0
                         for i in range(0,len(faces)):
@@ -193,7 +189,7 @@ cpdef show():
                             # print("Kiểu gì x" + str(type(x)))
                             # if y+w >20 and x+h >20:
                             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                            cv2.imshow('frame', frame) 
+                            cv2.imshow('frame', frame)
                             
                             roi = gray[y:y + h, x:x + w]
                             roi = cv2.resize(roi, (48, 48))
@@ -211,6 +207,7 @@ cpdef show():
                     #label = EMOTIONS[preds.argmax()]
                     max_emotion_position = preds.argmax()
                     for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
+
                         #construct the label text
                         
                         text = "{}: {:.2f}%".format(emotion, prob * 100)
@@ -218,14 +215,15 @@ cpdef show():
                         color = (255, 0, 0)          
                         if max_emotion_position == i:
                             color = (225,225,225)
-                            
+                        high_level_emotion = int(prob * 300)
+                        cv2.rectangle(frame, (7, (i * 35) + 5),
+                                      (high_level_emotion, (i * 35) + 35), (0, 0, 255), -1)
                         cv2.putText(frame, text, (10, (i * 35) + 23), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
                 cv2.imshow('frame', frame) 
             except queue.Full:
-                print("Full memory")
+                print(log_system + "full memory!")
                 pass
 
-        #cv2.imshow("Probabilities", canvas)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             finished = True
             break
@@ -238,7 +236,7 @@ cpdef show():
 # Using cython compiler directives to remove some of the checks that numpy usually has to make
 # Use typed memoryviews so that I can specify memory layout (and sometimes they are faster in general compared to the older buffer interface)
 # Unrolled the loops so that we don't use numpy's slice machinary:
-cpdef public Main():
+def Main():
     tReadFile = threading.Thread(target=show)
     tProcessingFile = threading.Thread(target=smooth_emotions)
 
