@@ -101,6 +101,17 @@ def remove_fast(rootdir):
     print ("Done!")
     cv2.destroyAllWindows()
 
+def get_path_list(dir_name):
+    import glob
+    import os
+    # dir_name = 'C:/Program Files/Java/jdk1.8.0_191/include/'
+    # Get list of all files in a given directory & sub-directories sorted by name
+    list_of_files = sorted( filter( os.path.isfile,
+                            glob.glob(dir_name + '/**/*', recursive=True) ) )
+    # Iterate over sorted list of files and print the file paths 
+    # one by one.
+    for file_path in list_of_files:
+        print(file_path) 
 
 if __name__ == '__main__':
     #remove_fast(rootdir)
